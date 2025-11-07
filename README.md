@@ -219,8 +219,8 @@ Before you begin, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/whatsapp-gateway-api.git
-cd whatsapp-gateway-api
+git clone https://github.com/radhityaa/ayasya-wagw.git
+cd ayasya-wagw
 ```
 
 ### 2. Install Dependencies
@@ -373,7 +373,6 @@ Access the full interactive API documentation:
 - **Markdown Documentation**: [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
 - **Implementation Guide**: [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)
 - **Webhook Guide**: [WEBHOOK_IMPLEMENTATION.md](./WEBHOOK_IMPLEMENTATION.md)
-- **Testing Results**: [TESTING_RESULTS_FINAL.md](./TESTING_RESULTS_FINAL.md)
 
 ### Authentication
 
@@ -761,8 +760,7 @@ whatsapp-gateway-api/
 ├── docs/                     # Documentation
 │   ├── API_DOCUMENTATION.md
 │   ├── IMPLEMENTATION_SUMMARY.md
-│   ├── WEBHOOK_IMPLEMENTATION.md
-│   └── TESTING_RESULTS_FINAL.md
+│   └── WEBHOOK_IMPLEMENTATION.md
 ├── .env                      # Environment variables
 ├── .gitignore
 ├── package.json
@@ -772,48 +770,6 @@ whatsapp-gateway-api/
 ```
 
 ---
-
-## 🧪 Testing
-
-### Run Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run specific test
-node test-all-new-endpoints.js
-
-# Test observability endpoints
-node test-observability-endpoints.js
-
-# Test webhooks
-node test-webhook.js
-```
-
-### Test with HTTP Files
-
-Use the provided `.http` files with REST Client extension in VS Code:
-
-- `api-examples.http` - Basic API examples
-- `api-examples-advanced.http` - Advanced messaging
-- `api-examples-channels.http` - Channel operations
-- `test-observability.http` - Observability tests
-- `test-webhook-api.http` - Webhook tests
-
-### Manual Testing
-
-```bash
-# Health check
-curl http://localhost:3000/api/observability/health
-
-# Get instance status
-curl -H "X-API-Key: your-api-key" \
-  http://localhost:3000/api/instance/my-instance/status
-```
-
----
-
 ## 🔔 Webhooks
 
 ### Webhook Events
@@ -1162,7 +1118,7 @@ When reporting issues, please include:
 
 ## 📄 License
 
-This project is licensed under the ISC License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the ISC License.
 
 ---
 

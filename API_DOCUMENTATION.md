@@ -1793,7 +1793,6 @@ POST http://localhost:3000/api/message/send/text
 - API Documentation: This file
 - Implementation Guide: `IMPLEMENTATION_SUMMARY.md`
 - Webhook Guide: `WEBHOOK_IMPLEMENTATION.md`
-- Testing Results: `TESTING_RESULTS_FINAL.md`
 
 ### Test Files
 - HTTP Tests: `test-observability.http`
