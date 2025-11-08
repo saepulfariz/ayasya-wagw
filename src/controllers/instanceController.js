@@ -30,7 +30,7 @@ class InstanceController {
       res.status(201).json({
         success: true,
         data: instance,
-        message: 'Instance created successfully. Please scan the QR code or request pairing code.'
+        message: 'Instance created successfully. Use /qr or /pairing-code endpoints to authenticate.'
       });
     } catch (error) {
       console.error('Error creating instance:', error);

@@ -231,16 +231,31 @@ class SessionManager {
   }
 
   async getInstanceQR(instanceId) {
-    const whatsappInstance = whatsappService.getInstance(instanceId);
-    
-    if (!whatsappInstance) {
-      throw new Error('Instance not found');
+    let whatsappInstance = whatsappService.getInstance(instanceId);
+
+    // If instance doesn't exist or doesn't have a socket, reinitialize
+    if (!whatsappInstance || !whatsappInstance.socket) {
+      console.log(`Reinitializing instance ${instanceId} for QR code request`);
+      await whatsappService.init(instanceId);
+      whatsappInstance = whatsappService.getInstance(instanceId);
+
+      if (!whatsappInstance) {
+        throw new Error('Failed to initialize instance');
+      }
     }
-    
+
+    // Wait a bit for QR code to be generated
+    let attempts = 0;
+    while (!whatsappInstance.qr && attempts < 30) { // Wait up to 30 seconds
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      whatsappInstance = whatsappService.getInstance(instanceId);
+      attempts++;
+    }
+
     if (!whatsappInstance.qr) {
-      throw new Error('QR code not available. Instance may already be connected.');
+      throw new Error('QR code not available. Instance may already be connected or failed to generate QR.');
     }
-    
+
     return whatsappInstance.qr;
   }
 

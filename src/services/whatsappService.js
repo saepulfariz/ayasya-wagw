@@ -15,15 +15,35 @@ class WhatsAppService {
     this.appStateReady = new Map(); // Track app state readiness
   }
 
-  async init(instanceId) {
+  async init(instanceId, forceFresh = false) {
     try {
       const sessionPath = path.join(config.whatsapp.sessionPath, instanceId);
 
       // Ensure session directory exists
       await fs.mkdir(sessionPath, { recursive: true });
 
-      // Initialize auth state
-      const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+      let state, saveCreds;
+
+      // Check if we should start fresh or try to load existing session
+      if (forceFresh) {
+        // For fresh start, create empty auth state
+        const { state: freshState, saveCreds: freshSaveCreds } = await useMultiFileAuthState(sessionPath);
+        state = freshState;
+        saveCreds = freshSaveCreds;
+      } else {
+        try {
+          // Try to load existing auth state
+          const authState = await useMultiFileAuthState(sessionPath);
+          state = authState.state;
+          saveCreds = authState.saveCreds;
+        } catch (error) {
+          console.log(`Session files not found or corrupted for ${instanceId}, starting fresh`);
+          // If loading fails, start fresh
+          const { state: freshState, saveCreds: freshSaveCreds } = await useMultiFileAuthState(sessionPath);
+          state = freshState;
+          saveCreds = freshSaveCreds;
+        }
+      }
 
       // Create socket connection
       const socket = makeWASocket({
@@ -34,7 +54,9 @@ class WhatsAppService {
         keepAliveIntervalMs: 30000,
         connectTimeoutMs: 60000,
         emitOwnEvents: true,
-        generateHighQualityLinkPreview: true
+        generateHighQualityLinkPreview: true,
+        // Force fresh connection for QR/pairing code generation
+        forceFresh: forceFresh
       });
 
 
@@ -127,8 +149,8 @@ class WhatsAppService {
     const prisma = database.getInstance();
 
     try {
+      // Always generate QR code when available, regardless of phone number
       if (qr) {
-        // Generate QR code
         const qrCode = await qrcode.toDataURL(qr);
 
         // Update instance in database
@@ -164,9 +186,15 @@ class WhatsAppService {
           where: { id: instanceId },
           data: {
             status: 'disconnected',
-            qrCode: null
+            qrCode: null,
+            pairingCode: null
           }
         });
+
+        // Clear pairing code from memory
+        if (this.instances.has(instanceId)) {
+          this.instances.get(instanceId).pairingCode = null;
+        }
 
         // Trigger webhook for session status change using new service
         await webhookService.triggerSessionStatus(instanceId, 'disconnected', {
@@ -183,8 +211,8 @@ class WhatsAppService {
           console.log(`Reconnecting instance ${instanceId}... Attempt ${attempts + 1}`);
           await this.init(instanceId);
         } else {
-          // Remove instance from memory
-          this.instances.delete(instanceId);
+          // Don't remove instance from memory - keep it for potential QR/pairing code generation
+          // Only clear reconnect attempts
           this.reconnectAttempts.delete(instanceId);
 
           if (!shouldReconnect) {
@@ -259,6 +287,8 @@ class WhatsAppService {
 
         // Trigger webhook for session status change using new service
         await webhookService.triggerSessionStatus(instanceId, 'connecting');
+
+        // Auto-pairing code generation is disabled - use manual endpoints instead
       }
     } catch (error) {
       console.error('Error handling connection update:', error);
@@ -688,10 +718,17 @@ class WhatsAppService {
   }
 
   async requestPairingCode(instanceId, phoneNumber) {
-    const instance = this.instances.get(instanceId);
+    let instance = this.instances.get(instanceId);
 
+    // If instance doesn't exist or socket is not available, reinitialize with forceFresh
     if (!instance || !instance.socket) {
-      throw new Error('Instance not found or not connected');
+      console.log(`Reinitializing instance ${instanceId} for pairing code request`);
+      await this.init(instanceId, true); // Force fresh connection
+      instance = this.instances.get(instanceId);
+
+      if (!instance || !instance.socket) {
+        throw new Error('Failed to initialize instance for pairing code request');
+      }
     }
 
     const { socket } = instance;
@@ -699,6 +736,13 @@ class WhatsAppService {
     try {
       // Ensure phone number is in E.164 format without plus sign
       const cleanPhoneNumber = phoneNumber.replace(/^\+/, '');
+
+      // Wait a bit for socket to be ready
+      let attempts = 0;
+      while (!socket.user && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+      }
 
       const pairingCode = await socket.requestPairingCode(cleanPhoneNumber);
       console.log(`Pairing code requested for ${cleanPhoneNumber}: ${pairingCode}`);
