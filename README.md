@@ -253,8 +253,6 @@ DATABASE_URL="mysql://username:password@localhost:3306/whatsapp_gateway"
 API_PORT=3000
 NODE_ENV=development
 
-# Security
-JWT_SECRET="your-super-secret-jwt-key-change-this"
 API_KEY="your-api-key-here"
 
 # Optional: Webhook Configuration
@@ -309,7 +307,6 @@ Edit `src/config/config.js`:
 module.exports = {
     port: process.env.API_PORT || 3000,
     apiKey: process.env.API_KEY,
-    jwtSecret: process.env.JWT_SECRET,
     // ... other configurations
 };
 ```
@@ -422,102 +419,7 @@ Error responses:
 
 ## 🔗 API Endpoints
 
-### Instance Management (9 Endpoints)
-
-| Method | Endpoint                         | Description          |
-| ------ | -------------------------------- | -------------------- |
-| POST   | `/api/instance/create`           | Create new instance  |
-| GET    | `/api/instance`                  | List all instances   |
-| GET    | `/api/instance/:id/status`       | Get instance status  |
-| GET    | `/api/instance/:id/qr`           | Get QR code          |
-| POST   | `/api/instance/:id/restart`      | Restart instance     |
-| POST   | `/api/instance/:id/logout`       | Logout instance      |
-| DELETE | `/api/instance/:id`              | Delete instance      |
-| POST   | `/api/instance/:id/pairing-code` | Request pairing code |
-| GET    | `/api/instance/:id/pairing-code` | Get pairing code     |
-
-### Messaging (28+ Endpoints)
-
-| Method | Endpoint                         | Description            |
-| ------ | -------------------------------- | ---------------------- |
-| POST   | `/api/message/send/text`         | Send text message      |
-| POST   | `/api/message/send/image`        | Send image             |
-| POST   | `/api/message/send/video`        | Send video             |
-| POST   | `/api/message/send/file`         | Send document          |
-| POST   | `/api/message/send/voice`        | Send voice note        |
-| POST   | `/api/message/send/location`     | Send location          |
-| POST   | `/api/message/send/contact`      | Send contact vCard     |
-| POST   | `/api/message/send/list`         | Send list message      |
-| POST   | `/api/message/send/buttons`      | Send button message    |
-| POST   | `/api/message/send/poll`         | Send poll              |
-| POST   | `/api/message/send/link-preview` | Send link with preview |
-| POST   | `/api/message/forward`           | Forward message        |
-| POST   | `/api/message/seen`              | Mark as read           |
-| POST   | `/api/message/typing/start`      | Start typing           |
-| POST   | `/api/message/typing/stop`       | Stop typing            |
-| PUT    | `/api/message/reaction`          | Add reaction           |
-| PUT    | `/api/message/star`              | Star message           |
-| GET    | `/api/message/chats/:id`         | Get all chats          |
-| GET    | `/api/message/chat/:id/:chatId`  | Get chat messages      |
-| DELETE | `/api/message/:id/:messageId`    | Delete message         |
-
-### Groups (25 Endpoints)
-
-| Method | Endpoint                                 | Description                             |
-| ------ | ---------------------------------------- | --------------------------------------- |
-| GET    | `/api/groups/:id`                        | Get all groups                          |
-| POST   | `/api/groups/:id`                        | Create group                            |
-| GET    | `/api/groups/:id/:groupId`               | Get group info                          |
-| PUT    | `/api/groups/:id/:groupId/name`          | Update group name                       |
-| PUT    | `/api/groups/:id/:groupId/description`   | Update description                      |
-| POST   | `/api/groups/:id/:groupId/participants`  | Add participants                        |
-| DELETE | `/api/groups/:id/:groupId/participants`  | Remove participants                     |
-| POST   | `/api/groups/:id/:groupId/promote`       | Promote to admin                        |
-| POST   | `/api/groups/:id/:groupId/demote`        | Demote admin                            |
-| PUT    | `/api/groups/:id/:groupId/settings`      | Update settings                         |
-| POST   | `/api/groups/:id/:groupId/leave`         | Leave group                             |
-| GET    | `/api/groups/:id/:groupId/invite-code`   | Get invite code                         |
-| POST   | `/api/groups/:id/:groupId/revoke-invite` | Revoke invite                           |
-| POST   | `/api/groups/:id/accept-invite`          | Accept invite                           |
-| ...    | ...                                      | [See full list](./API_DOCUMENTATION.md) |
-
-### Status/Stories (6 Endpoints)
-
-| Method | Endpoint                         | Description         |
-| ------ | -------------------------------- | ------------------- |
-| POST   | `/api/status/:id/text`           | Send text status    |
-| POST   | `/api/status/:id/image`          | Send image status   |
-| POST   | `/api/status/:id/video`          | Send video status   |
-| POST   | `/api/status/:id/voice`          | Send voice status   |
-| POST   | `/api/status/:id/delete`         | Delete status       |
-| GET    | `/api/status/:id/new-message-id` | Generate message ID |
-
-### Contacts (11 Endpoints)
-
-| Method | Endpoint                         | Description                             |
-| ------ | -------------------------------- | --------------------------------------- |
-| GET    | `/api/contacts/:id/all`          | Get all contacts                        |
-| GET    | `/api/contacts/:id`              | Get contact info                        |
-| GET    | `/api/contacts/:id/check-exists` | Check if exists                         |
-| POST   | `/api/contacts/:id/block`        | Block contact                           |
-| POST   | `/api/contacts/:id/unblock`      | Unblock contact                         |
-| ...    | ...                              | [See full list](./API_DOCUMENTATION.md) |
-
-### Observability (7 Endpoints)
-
-| Method | Endpoint                         | Description       | Auth Required |
-| ------ | -------------------------------- | ----------------- | ------------- |
-| GET    | `/api/observability/ping`        | Server ping       | No            |
-| GET    | `/api/observability/health`      | Health check      | No            |
-| GET    | `/api/observability/version`     | Get version       | Yes           |
-| GET    | `/api/observability/environment` | Get environment   | Yes           |
-| GET    | `/api/observability/status`      | Get server status | Yes           |
-| POST   | `/api/observability/stop`        | Stop server       | Yes           |
-| POST   | `/api/observability/restart`     | Restart server    | Yes           |
-
-**[View Complete API Reference →](./API_DOCUMENTATION.md)**
-
----
+**APIDOG or JSON Documentation**: [API DOCUMENTATION](https://share.apidog.com/27587e37-6a2c-497d-b64d-1aee7400de92)
 
 ## 💡 Usage Examples
 
@@ -955,7 +857,7 @@ volumes:
 
 ### Production Checklist
 
--   [ ] Set strong `JWT_SECRET` and `API_KEY`
+-   [ ] Set strong `API_KEY`
 -   [ ] Configure proper `DATABASE_URL`
 -   [ ] Set `NODE_ENV=production`
 -   [ ] Enable HTTPS
