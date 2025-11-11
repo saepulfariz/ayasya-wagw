@@ -13,7 +13,7 @@ router.get('/:instanceId/check-exists', contactController.checkExists);
 router.get('/:instanceId/about', contactController.getProfilePicture);
 router.post('/:instanceId/block', contactController.blockContact);
 router.post('/:instanceId/unblock', contactController.unblockContact);
-router.put('/:instanceId/:chatId', contactController.updateContact);
+router.put('/:instanceId/update', contactController.updateContact);
 
 // LID routes
 router.get('/:instanceId/lids', contactController.getAllLids);

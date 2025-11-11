@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const instanceController = require('../controllers/instanceController');
-const authController = require('../controllers/authController');
+const { apiKeyAuth } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
-router.use(authController.validateApiKey);
+router.use(apiKeyAuth);
 
 // Instance management routes
 router.post('/create', instanceController.create);

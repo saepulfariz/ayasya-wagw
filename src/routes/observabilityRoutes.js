@@ -3,17 +3,19 @@ const router = express.Router();
 const observabilityController = require('../controllers/observabilityController');
 const { apiKeyAuth } = require('../middleware/auth');
 
+router.use(apiKeyAuth);
+
 // Public endpoints (no auth required)
 router.get('/ping', observabilityController.ping);
 router.get('/health', observabilityController.healthCheck);
 
 // Protected endpoints (require API key)
-router.get('/version', apiKeyAuth, observabilityController.getVersion);
-router.get('/environment', apiKeyAuth, observabilityController.getEnvironment);
-router.get('/status', apiKeyAuth, observabilityController.getStatus);
+router.get('/version', observabilityController.getVersion);
+router.get('/environment', observabilityController.getEnvironment);
+router.get('/status', observabilityController.getStatus);
 
 // Dangerous endpoints (require API key)
-router.post('/stop', apiKeyAuth, observabilityController.stopServer);
-router.post('/restart', apiKeyAuth, observabilityController.restartServer);
+router.post('/stop', observabilityController.stopServer);
+router.post('/restart', observabilityController.restartServer);
 
 module.exports = router;

@@ -1,9 +1,10 @@
+const { PrismaClient } = require('@prisma/client');
 const whatsappService = require('../services/whatsappService');
-const database = require('../config/database');
 
-class ChannelController {
-  // Get list of known channels/newsletters
-  async getChannels(req, res, next) {
+const prisma = new PrismaClient();
+
+// Get list of known channels/newsletters
+exports.getChannels = async (req, res, next) => {
     try {
       const { instanceId } = req.params;
       const instance = whatsappService.getInstance(instanceId);
@@ -19,7 +20,7 @@ class ChannelController {
       
       // Get newsletter/channel subscriptions
       // Note: Baileys supports newsletter functionality
-      const newsletters = await socket.getSubscribedNewsletters();
+      const newsletters = await socket.newsletterSubscribers();
       
       res.json({
         success: true,
@@ -34,10 +35,10 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Get channel info
-  async getChannelInfo(req, res, next) {
+// Get channel info
+exports.getChannelInfo = async (req, res, next) => {
     try {
       const { instanceId, channelId } = req.params;
       const instance = whatsappService.getInstance(instanceId);
@@ -67,10 +68,10 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Follow a channel
-  async followChannel(req, res, next) {
+// Follow a channel
+exports.followChannel = async (req, res, next) => {
     try {
       const { instanceId, channelId } = req.params;
       const instance = whatsappService.getInstance(instanceId);
@@ -101,10 +102,10 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Unfollow a channel
-  async unfollowChannel(req, res, next) {
+// Unfollow a channel
+exports.unfollowChannel = async (req, res, next) => {
     try {
       const { instanceId, channelId } = req.params;
       const instance = whatsappService.getInstance(instanceId);
@@ -135,10 +136,10 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Mute a channel
-  async muteChannel(req, res, next) {
+// Mute a channel
+exports.muteChannel = async (req, res, next) => {
     try {
       const { instanceId, channelId } = req.params;
       const { duration = 8 * 60 * 60 } = req.body; // Default 8 hours in seconds
@@ -171,10 +172,10 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Unmute a channel
-  async unmuteChannel(req, res, next) {
+// Unmute a channel
+exports.unmuteChannel = async (req, res, next) => {
     try {
       const { instanceId, channelId } = req.params;
       const instance = whatsappService.getInstance(instanceId);
@@ -205,10 +206,10 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Create a new channel (Newsletter)
-  async createChannel(req, res, next) {
+// Create a new channel (Newsletter)
+exports.createChannel = async (req, res, next) => {
     try {
       const { instanceId } = req.params;
       const { name, description, picture } = req.body;
@@ -241,25 +242,25 @@ class ChannelController {
         newsletterData.picture = picture;
       }
 
-      const result = await socket.createNewsletter(newsletterData);
+      const result = await socket.newsletterCreate(newsletterData);
       
       res.json({
         success: true,
         message: 'Channel created successfully',
-        data: result
+        data: result,
       });
     } catch (error) {
       console.error('Error creating channel:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to create channel',
-        details: error.message
+        details: error.message,
       });
     }
-  }
+}
 
-  // Delete a channel
-  async deleteChannel(req, res, next) {
+// Delete a channel
+exports.deleteChannel = async (req, res, next) => {
     try {
       const { instanceId, channelId } = req.params;
       const instance = whatsappService.getInstance(instanceId);
@@ -286,10 +287,10 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Get channel messages preview
-  async getChannelMessagesPreview(req, res, next) {
+// Get channel messages preview
+exports.getChannelMessagesPreview = async (req, res, next) => {
     try {
       const { instanceId, channelId } = req.params;
       const { limit = 20 } = req.query;
@@ -322,10 +323,10 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Search channels by text
-  async searchChannelsByText(req, res, next) {
+// Search channels by text
+exports.searchChannelsByText = async (req, res, next) => {
     try {
       const { instanceId } = req.params;
       const { query, limit = 20 } = req.body;
@@ -352,80 +353,77 @@ class ChannelController {
         details: error.message
       });
     }
-  }
+}
 
-  // Search channels by view count
-  async searchChannelsByView(req, res, next) {
-    try {
-      // Note: This feature is not available in WhatsApp Web API
-      res.status(501).json({
-        success: false,
-        error: 'Search by view count is not supported',
-        details: 'WhatsApp Web API does not support searching channels by view count'
-      });
-    } catch (error) {
-      console.error('Error searching channels by view:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to search channels',
-        details: error.message
-      });
-    }
-  }
-
-  // Get search views list
-  async getSearchViews(req, res, next) {
-    try {
-      // Note: This feature is not available in WhatsApp Web API
-      res.status(501).json({
-        success: false,
-        error: 'Search views list is not supported',
-        details: 'WhatsApp Web API does not support getting search view categories'
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get search views',
-        details: error.message
-      });
-    }
-  }
-
-  // Get search countries list
-  async getSearchCountries(req, res, next) {
-    try {
-      // Note: This feature is not available in WhatsApp Web API
-      res.status(501).json({
-        success: false,
-        error: 'Search countries list is not supported',
-        details: 'WhatsApp Web API does not support getting search countries'
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get search countries',
-        details: error.message
-      });
-    }
-  }
-
-  // Get search categories list
-  async getSearchCategories(req, res, next) {
-    try {
-      // Note: This feature is not available in WhatsApp Web API
-      res.status(501).json({
-        success: false,
-        error: 'Search categories list is not supported',
-        details: 'WhatsApp Web API does not support getting search categories'
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get search categories',
-        details: error.message
-      });
-    }
+// Search channels by view count
+exports.searchChannelsByView = async (req, res, next) => {
+  try {
+    // Note: This feature is not available in WhatsApp Web API
+    res.status(501).json({
+      success: false,
+      error: 'Search by view count is not supported',
+      details: 'WhatsApp Web API does not support searching channels by view count'
+    });
+  } catch (error) {
+    console.error('Error searching channels by view:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to search channels',
+      details: error.message
+    });
   }
 }
 
-module.exports = new ChannelController();
+// Get search views list
+exports.getSearchViews = async (req, res, next) => {
+  try {
+    // Note: This feature is not available in WhatsApp Web API
+    res.status(501).json({
+      success: false,
+      error: 'Search views list is not supported',
+      details: 'WhatsApp Web API does not support getting search view categories'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get search views',
+      details: error.message
+    });
+  }
+}
+
+// Get search countries list
+exports.getSearchCountries = async (req, res, next) => {
+  try {
+    // Note: This feature is not available in WhatsApp Web API
+    res.status(501).json({
+      success: false,
+      error: 'Search countries list is not supported',
+      details: 'WhatsApp Web API does not support getting search countries'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get search countries',
+      details: error.message
+    });
+  }
+}
+
+// Get search categories list
+exports.getSearchCategories = async (req, res, next) => {
+  try {
+    // Note: This feature is not available in WhatsApp Web API
+    res.status(501).json({
+      success: false,
+      error: 'Search categories list is not supported',
+      details: 'WhatsApp Web API does not support getting search categories'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get search categories',
+      details: error.message
+    });
+  }
+}

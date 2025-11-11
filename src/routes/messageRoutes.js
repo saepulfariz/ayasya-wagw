@@ -1,14 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const messageController = require('../controllers/messageController');
-const authController = require('../controllers/authController');
+const { apiKeyAuth } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
-router.use(authController.validateApiKey);
+router.use(apiKeyAuth);
 
 // Message sending routes
-router.post('/send/text', messageController.sendText);
-router.post('/send/media', messageController.sendMedia);
 router.post('/send/bulk', messageController.sendBulk);
 
 // Message management routes

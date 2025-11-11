@@ -10,13 +10,11 @@ router.use(apiKeyAuth);
 router.get('/:instanceId', groupController.getGroups);
 router.post('/:instanceId', groupController.createGroup);
 router.get('/:instanceId/count', groupController.getGroupsCount);
-router.post('/:instanceId/refresh', groupController.refreshGroups);
 router.get('/:instanceId/join-info', groupController.getJoinInfoGroup);
 router.post('/:instanceId/join', groupController.joinGroup);
 
 // Specific group routes
 router.get('/:instanceId/:groupId', groupController.getGroupById);
-router.delete('/:instanceId/:groupId', groupController.deleteGroup);
 router.post('/:instanceId/:groupId/leave', groupController.leaveGroup);
 
 // Group invite code routes

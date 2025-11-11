@@ -20,7 +20,6 @@ const contactRoutes = require('./routes/contactRoutes.js');
 const presenceRoutes = require('./routes/presenceRoutes.js');
 const eventRoutes = require('./routes/eventRoutes.js');
 const labelRoutes = require('./routes/labelRoutes.js');
-const mediaRoutes = require('./routes/mediaRoutes.js');
 const observabilityRoutes = require('./routes/observabilityRoutes.js');
 const chatRoutes = require('./routes/chatRoutes.js');
 
@@ -40,15 +39,14 @@ app.use('/public', express.static(path.join(__dirname, '../public')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    status: 'healthy',
-    timestamp: new Date(),
-    uptime: process.uptime(),
-    environment: config.env
-  });
+    res.json({
+        success: true,
+        status: 'healthy',
+        timestamp: new Date(),
+        uptime: process.uptime(),
+        environment: config.env,
+    });
 });
-
 
 // API routes
 app.use('/api/instance', instanceRoutes);
@@ -64,18 +62,17 @@ app.use('/api/contacts', contactRoutes);
 app.use('/api/presence', presenceRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/labels', labelRoutes);
-app.use('/api/media', mediaRoutes);
 app.use('/api/observability', observabilityRoutes);
 app.use('/api/chats', chatRoutes);
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Endpoint not found',
-    path: req.path,
-    method: req.method
-  });
+    res.status(404).json({
+        success: false,
+        error: 'Endpoint not found',
+        path: req.path,
+        method: req.method,
+    });
 });
 
 // Error handling middleware (must be last)

@@ -690,14 +690,14 @@ END:VCARD`;
   async sendSeen(req, res) {
     try {
       const { instanceId, chatId, messageIds } = req.body;
-      
+
       if (!instanceId || !chatId) {
         return res.status(400).json({
           success: false,
           error: 'instanceId and chatId are required'
         });
       }
-      
+
       const instance = whatsappService.getInstance(instanceId);
       if (!instance || !instance.socket) {
         return res.status(404).json({
@@ -705,21 +705,25 @@ END:VCARD`;
           error: 'Instance not found or not connected'
         });
       }
-      
+
       const jid = chatId.includes('@') ? chatId : `${chatId}@s.whatsapp.net`;
-      
-      if (messageIds && Array.isArray(messageIds)) {
-        // Mark specific messages as read
+
+      if (messageIds && Array.isArray(messageIds) && messageIds.length > 0) {
+        // Mark specific messages as read using readMessages
         const keys = messageIds.map(id => ({
           remoteJid: jid,
-          id: id
+          id: id,
+          fromMe: false // Assuming we're marking received messages as read
         }));
         await instance.socket.readMessages(keys);
       } else {
-        // Mark all messages in chat as read
-        await instance.socket.sendReadReceipt(jid, undefined, undefined);
+        // Mark all unread messages in chat as read using chatModify
+        await instance.socket.chatModify({
+          chatId: jid,
+          read: true
+        });
       }
-      
+
       res.json({
         success: true,
         message: 'Messages marked as seen'
@@ -732,6 +736,9 @@ END:VCARD`;
       });
     }
   }
+
+
+
 
   // Start typing indicator
   async startTyping(req, res) {
