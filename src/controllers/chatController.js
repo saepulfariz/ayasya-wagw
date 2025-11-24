@@ -106,14 +106,30 @@ exports.getChatPicture = async (req, res) => {
 exports.getMessagesInChat = async (req, res) => {
     try {
         const { instanceId, chatId } = req.params;
-        const { limit = 50 } = req.query;
+        const { limit = 50, offset = 0 } = req.query;
 
-        const messages = await whatsappService.getMessagesInChat(instanceId, chatId, parseInt(limit));
+        if (!instanceId || !chatId) {
+            return res.status(400).json({
+                success: false,
+                error: 'instanceId and chatId are required',
+            });
+        }
+
+        const messages = await whatsappService.getMessagesInChat(
+            instanceId, 
+            chatId, 
+            parseInt(limit), 
+            parseInt(offset)
+        );
 
         res.json({
             success: true,
             data: messages,
             count: messages.length,
+            pagination: {
+                limit: parseInt(limit),
+                offset: parseInt(offset),
+            },
         });
     } catch (error) {
         console.error('Error getting messages in chat:', error);

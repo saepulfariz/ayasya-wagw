@@ -1414,25 +1414,85 @@ class WhatsAppService {
         }
     }
 
-    async getMessagesInChat(instanceId, chatId, limit = 50) {
+    async getMessagesInChat(instanceId, chatId, limit = 50, offset = 0) {
         const prisma = database.getInstance();
 
         try {
-            const messages = await prisma.message.findMany({
+            // Normalize chatId to ensure proper JID format
+            let normalizedChatId = chatId;
+            if (!chatId.includes('@')) {
+                // If no @, assume it's a phone number, add @s.whatsapp.net
+                normalizedChatId = `${chatId}@s.whatsapp.net`;
+            }
+
+            // First, find the chat in database to get chat.id (foreign key)
+            const chat = await prisma.chat.findFirst({
                 where: {
                     instanceId,
-                    chatId: {
-                        contains: chatId,
-                    },
-                },
-                orderBy: { timestamp: 'desc' },
-                take: limit,
-                include: {
-                    chat: true,
+                    OR: [
+                        { chatId: normalizedChatId },
+                        { chatId: chatId }, // Also try original format
+                    ],
                 },
             });
 
-            return messages.reverse(); // Return in chronological order
+            if (!chat) {
+                // Chat not found in database, return empty array
+                console.warn(`Chat ${normalizedChatId} not found in database for instance ${instanceId}`);
+                return [];
+            }
+
+            // Get messages using chat.id (foreign key) and also match by 'to' field as fallback
+            const messages = await prisma.message.findMany({
+                where: {
+                    instanceId,
+                    OR: [
+                        { chatId: chat.id }, // Use foreign key (preferred)
+                        { 
+                            to: {
+                                in: [normalizedChatId, chatId] // Also match by 'to' field
+                            }
+                        },
+                    ],
+                },
+                orderBy: { timestamp: 'desc' },
+                take: parseInt(limit),
+                skip: parseInt(offset),
+                include: {
+                    chat: {
+                        select: {
+                            id: true,
+                            chatId: true,
+                            name: true,
+                            isGroup: true,
+                        },
+                    },
+                },
+            });
+
+            // Reverse to return in chronological order (oldest first)
+            const sortedMessages = messages.reverse();
+
+            // Format messages for response
+            return sortedMessages.map((msg) => ({
+                id: msg.id,
+                messageId: msg.messageId,
+                fromMe: msg.fromMe,
+                from: msg.from,
+                to: msg.to,
+                body: msg.body,
+                type: msg.type,
+                mediaUrl: msg.mediaUrl,
+                timestamp: msg.timestamp,
+                status: msg.status,
+                createdAt: msg.createdAt,
+                chat: msg.chat ? {
+                    id: msg.chat.chatId, // Return chatId (JID) as id for API response
+                    chatId: msg.chat.chatId,
+                    name: msg.chat.name,
+                    isGroup: msg.chat.isGroup,
+                } : null,
+            }));
         } catch (error) {
             console.error('Error getting messages in chat:', error);
             throw error;
