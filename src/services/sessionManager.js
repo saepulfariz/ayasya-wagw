@@ -1,6 +1,9 @@
 const database = require('../config/database');
 const whatsappService = require('./whatsappService');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+const fs = require('fs').promises;
+const config = require('../config/config');
 
 class SessionManager {
   constructor() {
@@ -233,10 +236,39 @@ class SessionManager {
   async getInstanceQR(instanceId) {
     let whatsappInstance = whatsappService.getInstance(instanceId);
 
-    // If instance doesn't exist or doesn't have a socket, reinitialize
-    if (!whatsappInstance || !whatsappInstance.socket) {
+    // If instance doesn't exist, doesn't have a socket, or socket is not connected, reinitialize
+    const needsReinit = !whatsappInstance || 
+                        !whatsappInstance.socket || 
+                        (whatsappInstance.socket && !whatsappInstance.socket.user);
+
+    if (needsReinit) {
       console.log(`Reinitializing instance ${instanceId} for QR code request`);
+      
+      // Remove existing instance from memory to ensure clean reinitialize
+      // Don't use deleteInstance as it will logout, just remove from memory
+      whatsappService.removeInstanceFromMemory(instanceId);
+      
+      // Delete session files to force QR code generation
+      const sessionPath = path.join(config.whatsapp.sessionPath, instanceId);
+      try {
+        await fs.rmdir(sessionPath, { recursive: true });
+        console.log(`Session files deleted for instance ${instanceId}`);
+      } catch (err) {
+        // Ignore error if directory doesn't exist
+        if (err.code !== 'ENOENT') {
+          console.error(`Failed to delete session files for ${instanceId}:`, err);
+        }
+      }
+      
+      // Wait a moment for cleanup
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Reinitialize
       await whatsappService.init(instanceId);
+      
+      // Wait a moment for socket to initialize and connection.update event to fire
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       whatsappInstance = whatsappService.getInstance(instanceId);
 
       if (!whatsappInstance) {
@@ -244,18 +276,34 @@ class SessionManager {
       }
     }
 
-    // Wait a bit for QR code to be generated
+    // Wait for QR code to be generated
+    // QR code comes from connection.update event which may take a moment
     let attempts = 0;
-    while (!whatsappInstance.qr && attempts < 30) { // Wait up to 30 seconds
+    const maxAttempts = 60; // Wait up to 60 seconds for QR code
+    
+    console.log(`Waiting for QR code generation for instance ${instanceId}...`);
+    
+    while (!whatsappInstance.qr && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       whatsappInstance = whatsappService.getInstance(instanceId);
       attempts++;
+      
+      // Log progress every 10 seconds
+      if (attempts % 10 === 0) {
+        console.log(`Still waiting for QR code... (${attempts}/${maxAttempts} seconds)`);
+      }
+      
+      // Check if socket is still valid
+      if (whatsappInstance && whatsappInstance.socket && whatsappInstance.socket.user) {
+        throw new Error('Instance is already connected. Cannot generate QR code for connected instance.');
+      }
     }
 
     if (!whatsappInstance.qr) {
-      throw new Error('QR code not available. Instance may already be connected or failed to generate QR.');
+      throw new Error('QR code not available. Instance may already be connected or failed to generate QR. Please try restarting the instance.');
     }
 
+    console.log(`QR code generated successfully for instance ${instanceId}`);
     return whatsappInstance.qr;
   }
 

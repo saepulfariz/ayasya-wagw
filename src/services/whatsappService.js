@@ -283,6 +283,13 @@ class WhatsAppService {
                         } catch (err) {
                             console.error('Failed to delete session:', err);
                         }
+
+                        // Clear socket from memory to allow reinitialize for QR generation
+                        if (this.instances.has(instanceId)) {
+                            this.instances.get(instanceId).socket = null;
+                            this.instances.get(instanceId).qr = null;
+                            this.instances.get(instanceId).info = null;
+                        }
                     }
                 }
             }
@@ -879,6 +886,7 @@ class WhatsAppService {
         // Remove from memory
         this.instances.delete(instanceId);
         this.reconnectAttempts.delete(instanceId);
+        this.appStateReady.delete(instanceId);
 
         // Delete session files
         const sessionPath = path.join(config.whatsapp.sessionPath, instanceId);
@@ -887,6 +895,13 @@ class WhatsAppService {
         } catch (err) {
             console.error('Failed to delete session files:', err);
         }
+    }
+
+    removeInstanceFromMemory(instanceId) {
+        // Remove from memory without logging out (for reinitialize purposes)
+        this.instances.delete(instanceId);
+        this.reconnectAttempts.delete(instanceId);
+        this.appStateReady.delete(instanceId);
     }
 
     getInstance(instanceId) {
