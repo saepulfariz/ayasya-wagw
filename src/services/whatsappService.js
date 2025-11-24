@@ -147,10 +147,88 @@ class WhatsAppService {
             socket.ev.on('labels.association', async (labelAssociation) => {
                 await this.handleLabelAssociation(instanceId, labelAssociation);
             });
-
-            // Handle app state sync - this is crucial for profile updates
+            
             socket.ev.on('messaging-history.set', async ({ chats, contacts, messages, isLatest }) => {
-                console.log(`📱 App state sync for instance ${instanceId}: chats=${chats?.length || 0}, contacts=${contacts?.length || 0}, messages=${messages?.length || 0}, isLatest=${isLatest}`);
+                console.log(`📱 History sync for instance ${instanceId}: chats=${chats?.length || 0}, contacts=${contacts?.length || 0}, messages=${messages?.length || 0}, isLatest=${isLatest}`);
+                
+                const prisma = database.getInstance();
+                
+                // Store all chats from history sync to database
+                if (chats && chats.length > 0) {
+                    try {
+                        for (const chat of chats) {
+                            const chatId = chat.id;
+                            const name = chat.name || (chat.id || '').split('@')[0];
+                            const isGroup = chatId.endsWith('@g.us');
+                            const archived = chat.archived || false;
+                            const unreadCount = chat.unreadCount || 0;
+                            
+                            // Extract last message
+                            let lastMessage = '';
+                            let lastMessageAt = null;
+                            
+                            if (chat.lastMessage) {
+                                if (chat.lastMessage.message?.conversation) {
+                                    lastMessage = chat.lastMessage.message.conversation;
+                                } else if (chat.lastMessage.message?.extendedTextMessage?.text) {
+                                    lastMessage = chat.lastMessage.message.extendedTextMessage.text;
+                                } else if (chat.lastMessage.message?.imageMessage?.caption) {
+                                    lastMessage = chat.lastMessage.message.imageMessage.caption;
+                                } else if (chat.lastMessage.message?.videoMessage?.caption) {
+                                    lastMessage = chat.lastMessage.message.videoMessage.caption;
+                                } else if (chat.lastMessage.message?.documentMessage?.fileName) {
+                                    lastMessage = chat.lastMessage.message.documentMessage.fileName;
+                                }
+                                
+                                if (chat.lastMessage.messageTimestamp) {
+                                    lastMessageAt = new Date(chat.lastMessage.messageTimestamp * 1000);
+                                }
+                            }
+                            
+                            // Upsert chat to database
+                            try {
+                                await prisma.chat.upsert({
+                                    where: {
+                                        instanceId_chatId: {
+                                            instanceId,
+                                            chatId,
+                                        },
+                                    },
+                                    update: {
+                                        name,
+                                        archived,
+                                        unreadCount,
+                                        lastMessage: lastMessage || null,
+                                        lastMessageAt: lastMessageAt || null,
+                                    },
+                                    create: {
+                                        instanceId,
+                                        chatId,
+                                        name,
+                                        isGroup,
+                                        archived,
+                                        unreadCount,
+                                        lastMessage: lastMessage || null,
+                                        lastMessageAt: lastMessageAt || null,
+                                    },
+                                });
+                            } catch (err) {
+                                console.error(`Error syncing chat ${chatId} from history:`, err);
+                            }
+                        }
+                        console.log(`✅ Synced ${chats.length} chats from history to database for instance ${instanceId}`);
+                    } catch (error) {
+                        console.error('Error processing chats from history sync:', error);
+                    }
+                }
+                
+                // Store messages from history sync (if needed)
+                // Note: Messages are already handled by handleIncomingMessages, but we can process them here too
+                if (messages && messages.length > 0) {
+                    console.log(`📨 Processing ${messages.length} messages from history sync for instance ${instanceId}`);
+                    // Messages will be processed by handleIncomingMessages when they come through
+                }
+                
                 if (isLatest) {
                     // Only mark as ready if not already marked by timeout
                     if (!this.appStateReady.get(instanceId)) {
@@ -960,8 +1038,132 @@ class WhatsAppService {
         const prisma = database.getInstance();
 
         try {
-            // Get chats from database first
-            const dbChats = await prisma.chat.findMany({
+            // First, try to fetch all chats from WhatsApp server if store is empty or incomplete
+            let storeChats = [];
+            
+            // Get chats from store first
+            if (socket.store && socket.store.chats) {
+                try {
+                    // Try different methods to get chats from store
+                    if (typeof socket.store.chats.all === 'function') {
+                        storeChats = socket.store.chats.all();
+                    } else if (socket.store.chats instanceof Map) {
+                        storeChats = Array.from(socket.store.chats.values());
+                    } else if (typeof socket.store.chats === 'object') {
+                        storeChats = Object.values(socket.store.chats);
+                    } else if (Array.isArray(socket.store.chats)) {
+                        storeChats = socket.store.chats;
+                    }
+                    
+                    // Filter out invalid chats
+                    storeChats = storeChats.filter(chat => chat && chat.id);
+                    
+                    console.log(`Found ${storeChats.length} chats in WhatsApp store for instance ${instanceId}`);
+                } catch (err) {
+                    console.error('Error getting chats from store:', err);
+                }
+            }
+
+            // According to Baileys docs: https://baileys.wiki/docs/socket/history-sync/
+            // We can use fetchMessageHistory for on-demand history sync
+            // But first, let's check if we have all chats in database
+            const dbChatCount = await prisma.chat.count({ where: { instanceId } });
+            
+            // If database has few chats and store also has few, try to trigger history sync
+            // Note: History sync happens automatically on connection, but we can check if it's complete
+            if ((storeChats.length < 50 || dbChatCount < 50) && socket.fetchMessageHistory) {
+                try {
+                    console.log(`Store has ${storeChats.length} chats, database has ${dbChatCount} chats. History sync should have populated these.`);
+                    console.log(`If chats are missing, they will be synced via messaging-history.set event when available.`);
+                } catch (err) {
+                    console.error('Error checking history sync status:', err);
+                }
+            }
+            
+            // Log store status
+            if (storeChats.length === 0) {
+                console.log(`No chats found in WhatsApp store for instance ${instanceId}. Will use database as fallback.`);
+            }
+
+            // Sync all chats from store to database
+            const chatMap = new Map();
+            
+            for (const chat of storeChats) {
+                const chatId = chat.id;
+                const name = chat.name || (chat.id || '').split('@')[0];
+                const isGroup = chatId.endsWith('@g.us');
+                const archived = chat.archived || false;
+                const unreadCount = chat.unreadCount || 0;
+                
+                // Extract last message
+                let lastMessage = '';
+                let lastMessageAt = null;
+                
+                if (chat.lastMessage) {
+                    if (chat.lastMessage.message?.conversation) {
+                        lastMessage = chat.lastMessage.message.conversation;
+                    } else if (chat.lastMessage.message?.extendedTextMessage?.text) {
+                        lastMessage = chat.lastMessage.message.extendedTextMessage.text;
+                    } else if (chat.lastMessage.message?.imageMessage?.caption) {
+                        lastMessage = chat.lastMessage.message.imageMessage.caption;
+                    } else if (chat.lastMessage.message?.videoMessage?.caption) {
+                        lastMessage = chat.lastMessage.message.videoMessage.caption;
+                    } else if (chat.lastMessage.message?.documentMessage?.fileName) {
+                        lastMessage = chat.lastMessage.message.documentMessage.fileName;
+                    }
+                    
+                    if (chat.lastMessage.messageTimestamp) {
+                        lastMessageAt = new Date(chat.lastMessage.messageTimestamp * 1000);
+                    }
+                }
+
+                // Upsert to database
+                try {
+                    await prisma.chat.upsert({
+                        where: {
+                            instanceId_chatId: {
+                                instanceId,
+                                chatId,
+                            },
+                        },
+                        update: {
+                            name,
+                            archived,
+                            unreadCount,
+                            lastMessage: lastMessage || null,
+                            lastMessageAt: lastMessageAt || null,
+                        },
+                        create: {
+                            instanceId,
+                            chatId,
+                            name,
+                            isGroup,
+                            archived,
+                            unreadCount,
+                            lastMessage: lastMessage || null,
+                            lastMessageAt: lastMessageAt || null,
+                        },
+                    });
+                } catch (err) {
+                    console.error(`Error syncing chat ${chatId} to database:`, err);
+                }
+
+                // Store in map for response
+                chatMap.set(chatId, {
+                    id: chatId,
+                    name,
+                    isGroup,
+                    archived,
+                    unreadCount,
+                    lastMessage: lastMessage || null,
+                    lastMessageAt,
+                });
+            }
+
+            // Note: We'll get all chats from database below, so we don't need to filter here
+
+            // Get ALL chats from database (this is the complete list)
+            const allDbChats = await prisma.chat.findMany({
                 where: { instanceId },
                 orderBy: { lastMessageAt: 'desc' },
                 include: {
@@ -971,34 +1173,87 @@ class WhatsAppService {
                 },
             });
 
-            // If no chats in database, try to get from WhatsApp store
-            if (dbChats.length === 0 && socket.store && socket.store.chats) {
-                const storeChats = socket.store.chats.all();
-                const chatsData = storeChats.map((chat) => ({
-                    id: chat.id,
-                    name: chat.name || (chat.id || '').split('@')[0],
-                    isGroup: chat.id.endsWith('@g.us'),
-                    archived: chat.archived || false,
-                    unreadCount: chat.unreadCount || 0,
-                    lastMessage: chat.lastMessage?.message?.conversation || '',
-                    lastMessageAt: chat.lastMessage?.messageTimestamp ? new Date(chat.lastMessage.messageTimestamp * 1000) : null,
-                    messageCount: 0,
-                }));
+            // Create a map of all database chats
+            const dbChatMap = new Map();
+            allDbChats.forEach(chat => {
+                dbChatMap.set(chat.chatId, {
+                    id: chat.chatId,
+                    name: chat.name,
+                    isGroup: chat.isGroup,
+                    archived: chat.archived,
+                    unreadCount: chat.unreadCount,
+                    lastMessage: chat.lastMessage,
+                    lastMessageAt: chat.lastMessageAt,
+                    messageCount: chat._count.messages,
+                });
+            });
 
-                return chatsData;
+            // Merge store data with database data
+            // Store data (real-time) takes priority for fields like name, archived, unreadCount
+            // But we include ALL chats from database, not just from store
+            const allChats = Array.from(dbChatMap.values()).map((dbChat) => {
+                const storeChat = chatMap.get(dbChat.id);
+                
+                // If chat exists in store, use store data (more up-to-date)
+                if (storeChat) {
+                    return {
+                        id: dbChat.id,
+                        name: storeChat.name || dbChat.name,
+                        isGroup: dbChat.isGroup,
+                        archived: storeChat.archived !== undefined ? storeChat.archived : dbChat.archived,
+                        unreadCount: storeChat.unreadCount !== undefined ? storeChat.unreadCount : dbChat.unreadCount,
+                        lastMessage: storeChat.lastMessage || dbChat.lastMessage,
+                        lastMessageAt: storeChat.lastMessageAt || dbChat.lastMessageAt,
+                        messageCount: dbChat.messageCount,
+                    };
+                }
+                
+                // Otherwise use database data
+                return dbChat;
+            });
+
+            // Also add any chats from store that are not in database yet
+            chatMap.forEach((storeChat, chatId) => {
+                if (!dbChatMap.has(chatId)) {
+                    // Find message count from database for this chat
+                    const dbChat = allDbChats.find(c => c.chatId === chatId);
+                    allChats.push({
+                        id: storeChat.id,
+                        name: storeChat.name,
+                        isGroup: storeChat.isGroup,
+                        archived: storeChat.archived,
+                        unreadCount: storeChat.unreadCount,
+                        lastMessage: storeChat.lastMessage,
+                        lastMessageAt: storeChat.lastMessageAt,
+                        messageCount: dbChat?._count?.messages || 0,
+                    });
+                }
+            });
+
+            console.log(`Total chats: ${allChats.length} (from store: ${chatMap.size}, from database: ${allDbChats.length})`);
+
+            // If no chats found at all, return empty array
+            if (allChats.length === 0) {
+                const dbChatCount = await prisma.chat.count({ where: { instanceId } });
+                console.log(`No chats found for instance ${instanceId}`, {
+                    storeChats: storeChats.length,
+                    chatMapSize: chatMap.size,
+                    databaseCount: dbChatCount,
+                    hasStore: !!socket.store,
+                    hasChats: !!socket.store?.chats,
+                });
+                return [];
             }
 
-            // Return database chats with proper formatting
-            return dbChats.map((chat) => ({
-                id: chat.chatId,
-                name: chat.name,
-                isGroup: chat.isGroup,
-                archived: chat.archived,
-                unreadCount: chat.unreadCount,
-                lastMessage: chat.lastMessage,
-                lastMessageAt: chat.lastMessageAt,
-                messageCount: chat._count.messages,
-            }));
+            // Sort by lastMessageAt descending
+            allChats.sort((a, b) => {
+                const dateA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+                const dateB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+                return dateB - dateA;
+            });
+
+            console.log(`Returning ${allChats.length} chats for instance ${instanceId}`);
+            return allChats;
         } catch (error) {
             console.error('Error getting chats:', error);
             throw error;
@@ -1029,21 +1284,112 @@ class WhatsAppService {
         const prisma = database.getInstance();
 
         try {
-            // Delete from WhatsApp
-            await socket.chatModify({
-                chatId,
-                delete: true,
-            });
+            // Normalize chatId to ensure proper JID format
+            let normalizedChatId = chatId;
+            if (!chatId.includes('@')) {
+                // If no @, assume it's a phone number, add @s.whatsapp.net
+                normalizedChatId = `${chatId}@s.whatsapp.net`;
+            }
 
-            // Delete from database
-            await prisma.chat.deleteMany({
+            // Verify chat exists in database first
+            const existingChat = await prisma.chat.findUnique({
                 where: {
-                    instanceId,
-                    chatId,
+                    instanceId_chatId: {
+                        instanceId,
+                        chatId: normalizedChatId,
+                    },
                 },
             });
 
-            return { success: true, message: 'Chat deleted successfully' };
+            if (!existingChat) {
+                // Try with original chatId format
+                const existingChatAlt = await prisma.chat.findUnique({
+                    where: {
+                        instanceId_chatId: {
+                            instanceId,
+                            chatId: chatId,
+                        },
+                    },
+                });
+
+                if (!existingChatAlt) {
+                    console.warn(`Chat ${chatId} not found in database, but will still try to delete from WhatsApp`);
+                }
+            }
+
+            // Delete from WhatsApp
+            try {
+                await socket.chatModify({
+                    chatId: normalizedChatId,
+                    delete: true,
+                });
+                console.log(`Chat ${normalizedChatId} deleted from WhatsApp`);
+            } catch (whatsappError) {
+                // If WhatsApp deletion fails, try with original chatId
+                if (normalizedChatId !== chatId) {
+                    try {
+                        await socket.chatModify({
+                            chatId: chatId,
+                            delete: true,
+                        });
+                        console.log(`Chat ${chatId} deleted from WhatsApp (using original format)`);
+                        normalizedChatId = chatId; // Use original for database deletion
+                    } catch (err) {
+                        console.error('Error deleting chat from WhatsApp:', err);
+                        throw new Error(`Failed to delete chat from WhatsApp: ${err.message}`);
+                    }
+                } else {
+                    throw whatsappError;
+                }
+            }
+
+            // Find chat in database to get the chat.id for message deletion
+            const chatToDelete = await prisma.chat.findFirst({
+                where: {
+                    instanceId,
+                    OR: [
+                        { chatId: normalizedChatId },
+                        { chatId: chatId }, // Also try original format
+                    ],
+                },
+            });
+
+            let deletedMessages = { count: 0 };
+            if (chatToDelete) {
+                // Delete messages using chat.id (foreign key)
+                deletedMessages = await prisma.message.deleteMany({
+                    where: {
+                        chatId: chatToDelete.id,
+                    },
+                });
+                console.log(`Deleted ${deletedMessages.count} messages for chat ${chatToDelete.id}`);
+            } else {
+                // If chat not found, messages will be deleted by cascade when chat is deleted
+                // But we can try to find and delete by matching 'to' field
+                console.log(`Chat not found in database, messages may be orphaned`);
+            }
+
+            // Delete chat from database
+            const deletedChats = await prisma.chat.deleteMany({
+                where: {
+                    instanceId,
+                    OR: [
+                        { chatId: normalizedChatId },
+                        { chatId: chatId }, // Also try original format
+                    ],
+                },
+            });
+
+            console.log(`Deleted chat ${normalizedChatId} from database (${deletedChats.count} chat(s), ${deletedMessages.count} message(s))`);
+
+            return { 
+                success: true, 
+                message: 'Chat deleted successfully',
+                deleted: {
+                    chat: deletedChats.count,
+                    messages: deletedMessages.count,
+                },
+            };
         } catch (error) {
             console.error('Error deleting chat:', error);
             throw error;

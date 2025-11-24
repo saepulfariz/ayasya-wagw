@@ -44,15 +44,23 @@ exports.deleteChat = async (req, res) => {
     try {
         const { instanceId, chatId } = req.params;
 
+        if (!instanceId || !chatId) {
+            return res.status(400).json({
+                success: false,
+                error: 'instanceId and chatId are required',
+            });
+        }
+
         const result = await whatsappService.deleteChat(instanceId, chatId);
 
         res.json({
             success: true,
             data: result,
+            message: 'Chat deleted successfully',
         });
     } catch (error) {
         console.error('Error deleting chat:', error);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             error: error.message || 'Failed to delete chat',
         });
